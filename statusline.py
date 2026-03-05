@@ -40,11 +40,13 @@ weekly_remaining = None
 
 try:
     cached = None
+    stale_data = None
     if os.path.exists(USAGE_CACHE):
+        with open(USAGE_CACHE) as f:
+            stale_data = json.load(f)
         age = time.time() - os.path.getmtime(USAGE_CACHE)
         if age < USAGE_TTL:
-            with open(USAGE_CACHE) as f:
-                cached = json.load(f)
+            cached = stale_data
 
     if cached is None:
         creds_path = os.path.join(os.path.expanduser('~'), '.claude', '.credentials.json')
@@ -60,10 +62,16 @@ try:
                     'Accept': 'application/json',
                 }
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                cached = json.loads(resp.read())
-            with open(USAGE_CACHE, 'w') as f:
-                json.dump(cached, f)
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    cached = json.loads(resp.read())
+                with open(USAGE_CACHE, 'w') as f:
+                    json.dump(cached, f)
+            except Exception:
+                cached = stale_data
+
+    if not cached:
+        cached = stale_data
 
     if cached:
         five_h = cached.get('five_hour', {}).get('utilization')
